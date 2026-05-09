@@ -1,0 +1,651 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <title>SNAKE // ARCADE</title>
+
+  <script src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&family=VT323:wght@400&display=swap" rel="stylesheet">
+
+  <style>
+    :root {
+      --neon-green: #39ff14;
+      --neon-cyan: #00f5ff;
+      --neon-red: #ff2442;
+      --neon-yellow: #ffe600;
+      --neon-orange: #ff6b00;
+      --bg-dark: #080c10;
+      --bg-panel: #0a1220;
+      --grid-color: rgba(0, 245, 255, 0.05);
+      --scanline: rgba(0, 0, 0, 0.35);
+      --glow-green: 0 0 8px #39ff14, 0 0 20px #39ff1466, 0 0 40px #39ff1422;
+      --glow-cyan: 0 0 8px #00f5ff, 0 0 20px #00f5ff66, 0 0 40px #00f5ff22;
+      --glow-red: 0 0 8px #ff2442, 0 0 20px #ff244266, 0 0 40px #ff244222;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: 'Press Start 2P', monospace;
+      background-color: var(--bg-dark);
+      color: var(--neon-green);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      overflow: hidden;
+      position: relative;
+    }
+
+    /* CRT scanlines overlay */
+    body::before {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        to bottom,
+        transparent 0px,
+        transparent 3px,
+        var(--scanline) 3px,
+        var(--scanline) 4px
+      );
+      pointer-events: none;
+      z-index: 9999;
+    }
+
+    /* Vignette */
+    body::after {
+      content: "";
+      position: fixed;
+      inset: 0;
+      background: radial-gradient(ellipse at center, transparent 50%, rgba(0,0,0,0.85) 100%);
+      pointer-events: none;
+      z-index: 9998;
+    }
+
+    /* Stars background */
+    .stars {
+      position: fixed;
+      inset: 0;
+      z-index: 0;
+      overflow: hidden;
+    }
+
+    .star {
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: rgba(0,245,255,0.4);
+      border-radius: 50%;
+      animation: twinkle 3s infinite alternate;
+    }
+
+    @keyframes twinkle {
+      0% { opacity: 0.2; }
+      100% { opacity: 1; }
+    }
+
+    /* Wrapper */
+    .arcade-cabinet {
+      position: relative;
+      z-index: 10;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 12px;
+      padding: 20px;
+    }
+
+    /* Title */
+    .arcade-title {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 28px;
+      color: var(--neon-cyan);
+      text-shadow: var(--glow-cyan);
+      letter-spacing: 8px;
+      animation: flicker 4s infinite;
+    }
+
+    .title-sub {
+      font-size: 9px;
+      color: var(--neon-yellow);
+      text-shadow: 0 0 8px var(--neon-yellow);
+      letter-spacing: 6px;
+      text-align: center;
+      margin-top: 4px;
+    }
+
+    @keyframes flicker {
+      0%, 95%, 100% { opacity: 1; }
+      96% { opacity: 0.6; }
+      97% { opacity: 1; }
+      98% { opacity: 0.4; }
+      99% { opacity: 1; }
+    }
+
+    /* HUD row */
+    .hud {
+      display: flex;
+      gap: 40px;
+      align-items: center;
+      font-size: 10px;
+    }
+
+    .hud-box {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .hud-label {
+      color: var(--neon-cyan);
+      font-size: 7px;
+      letter-spacing: 2px;
+      text-shadow: var(--glow-cyan);
+    }
+
+    .hud-value {
+      color: var(--neon-green);
+      font-size: 18px;
+      text-shadow: var(--glow-green);
+    }
+
+    .hud-divider {
+      width: 2px;
+      height: 40px;
+      background: linear-gradient(to bottom, transparent, var(--neon-cyan), transparent);
+      box-shadow: var(--glow-cyan);
+    }
+
+    /* Board */
+    .board {
+      position: relative;
+      width: 400px;
+      height: 400px;
+      background-color: #050d05;
+      background-image:
+        linear-gradient(var(--grid-color) 1px, transparent 1px),
+        linear-gradient(90deg, var(--grid-color) 1px, transparent 1px);
+      background-size: 20px 20px;
+      border: 2px solid var(--neon-cyan);
+      box-shadow:
+        0 0 0 1px #003344,
+        0 0 20px rgba(0,245,255,0.3),
+        0 0 60px rgba(0,245,255,0.1),
+        inset 0 0 40px rgba(0,0,0,0.8);
+      border-radius: 4px;
+      overflow: hidden;
+    }
+
+    /* Board corner decorations */
+    .board::before,
+    .board::after {
+      content: "+";
+      position: absolute;
+      font-family: 'VT323', monospace;
+      color: var(--neon-cyan);
+      font-size: 14px;
+      opacity: 0.6;
+    }
+    .board::before { top: 2px; left: 4px; }
+    .board::after  { bottom: 2px; right: 4px; }
+
+    /* Snake */
+    .snake-part {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      background-color: var(--neon-green);
+      box-shadow: var(--glow-green);
+      clip-path: inset(2px);
+    }
+
+    .head {
+      background-color: #80ff50;
+      box-shadow: 0 0 10px #39ff14, 0 0 30px #39ff1488, 0 0 2px white;
+      z-index: 2;
+    }
+
+    .tail {
+      background-color: #1a7a08;
+      box-shadow: 0 0 4px #39ff1444;
+    }
+
+    /* Eyes */
+    .eye {
+      position: absolute;
+      width: 4px;
+      height: 4px;
+      background: var(--bg-dark);
+      border-radius: 1px;
+    }
+
+    .eye::after {
+      content: "";
+      position: absolute;
+      width: 2px;
+      height: 2px;
+      background: var(--neon-cyan);
+      border-radius: 50%;
+      top: 1px;
+      left: 1px;
+    }
+
+    .eye1 { top: 4px; left: 3px; }
+    .eye2 { top: 4px; right: 3px; }
+    .right.eye1 { top: 5px; left: 11px; }
+    .right.eye2 { top: 10px; left: 11px; }
+    .left.eye1  { top: 5px; left: 3px; }
+    .left.eye2  { top: 10px; left: 3px; }
+    .up.eye1    { top: 3px; left: 5px; }
+    .up.eye2    { top: 3px; right: 5px; }
+    .down.eye1  { bottom: 3px; left: 5px; }
+    .down.eye2  { bottom: 3px; right: 5px; }
+
+    /* Food */
+    .food {
+      position: absolute;
+      width: 20px;
+      height: 20px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+
+    .food-inner {
+      width: 12px;
+      height: 12px;
+      background: var(--neon-red);
+      box-shadow: 0 0 6px var(--neon-red), 0 0 20px #ff244288;
+      clip-path: polygon(50% 0%, 100% 50%, 50% 100%, 0% 50%);
+      animation: spin-food 2s linear infinite;
+    }
+
+    @keyframes spin-food {
+      from { transform: rotate(0deg); }
+      to { transform: rotate(360deg); }
+    }
+
+    /* Start / Game Over screens */
+    .screen {
+      position: relative;
+      z-index: 10;
+      width: 440px;
+      padding: 40px 30px;
+      background: var(--bg-panel);
+      border: 2px solid var(--neon-cyan);
+      box-shadow:
+        0 0 20px rgba(0,245,255,0.3),
+        inset 0 0 60px rgba(0,0,0,0.6);
+      border-radius: 4px;
+      text-align: center;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 24px;
+    }
+
+    .screen-title {
+      font-size: 36px;
+      color: var(--neon-cyan);
+      text-shadow: var(--glow-cyan);
+      animation: flicker 4s infinite;
+    }
+
+    .screen-title.danger {
+      color: var(--neon-red);
+      text-shadow: var(--glow-red);
+    }
+
+    .screen-sub {
+      font-family: 'VT323', monospace;
+      font-size: 20px;
+      color: rgba(255,255,255,0.5);
+      letter-spacing: 2px;
+    }
+
+    .score-display {
+      font-size: 24px;
+      color: var(--neon-yellow);
+      text-shadow: 0 0 8px var(--neon-yellow);
+    }
+
+    .score-display span {
+      color: white;
+      font-size: 36px;
+    }
+
+    .arcade-btn {
+      font-family: 'Press Start 2P', monospace;
+      font-size: 12px;
+      padding: 14px 28px;
+      background: transparent;
+      border: 2px solid currentColor;
+      cursor: pointer;
+      letter-spacing: 2px;
+      transition: all 0.15s;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .arcade-btn::before {
+      content: "";
+      position: absolute;
+      inset: 0;
+      background: currentColor;
+      opacity: 0;
+      transition: opacity 0.15s;
+    }
+
+    .arcade-btn:hover::before { opacity: 0.15; }
+
+    .arcade-btn:hover {
+      transform: scale(1.05);
+      box-shadow: 0 0 20px currentColor;
+    }
+
+    .arcade-btn:active { transform: scale(0.97); }
+
+    .btn-start {
+      color: var(--neon-green);
+      box-shadow: 0 0 10px rgba(57,255,20,0.3);
+    }
+
+    .btn-restart {
+      color: var(--neon-red);
+      box-shadow: 0 0 10px rgba(255,36,66,0.3);
+    }
+
+    .instructions-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px 20px;
+      font-family: 'VT323', monospace;
+      font-size: 16px;
+      color: rgba(0,245,255,0.6);
+    }
+
+    .instructions-grid span {
+      color: var(--neon-yellow);
+    }
+
+    /* Decorative lines in screen */
+    .deco-line {
+      width: 100%;
+      height: 1px;
+      background: linear-gradient(to right, transparent, var(--neon-cyan), transparent);
+      opacity: 0.4;
+    }
+
+    /* Insert coin blink */
+    .insert-coin {
+      font-family: 'VT323', monospace;
+      font-size: 18px;
+      color: var(--neon-yellow);
+      text-shadow: 0 0 8px var(--neon-yellow);
+      animation: blink 1s step-start infinite;
+    }
+
+    @keyframes blink {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0; }
+    }
+
+    /* Bottom bar */
+    .bottom-bar {
+      font-family: 'VT323', monospace;
+      font-size: 14px;
+      color: rgba(0,245,255,0.3);
+      letter-spacing: 3px;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="stars" id="stars-bg"></div>
+  <div id="root"></div>
+
+<script type="text/babel">
+  const { useState, useEffect } = React;
+
+  const boardSize = 20;
+
+  // Generate star field
+  React.useEffect = useEffect;
+
+  function generateStars() {
+    const container = document.getElementById('stars-bg');
+    if (!container || container.children.length > 0) return;
+    for (let i = 0; i < 80; i++) {
+      const star = document.createElement('div');
+      star.className = 'star';
+      star.style.left = Math.random() * 100 + '%';
+      star.style.top = Math.random() * 100 + '%';
+      star.style.animationDelay = Math.random() * 3 + 's';
+      star.style.animationDuration = (2 + Math.random() * 3) + 's';
+      container.appendChild(star);
+    }
+  }
+
+  generateStars();
+
+  function getEyeClass(dir) {
+    if (dir.x === 1)  return "right";
+    if (dir.x === -1) return "left";
+    if (dir.y === -1) return "up";
+    if (dir.y === 1)  return "down";
+  }
+
+  // ──────────── SNAKE COMPONENT ────────────
+  function Snake({ snake, direction }) {
+    return (
+      <>
+        {snake.map((part, i) => {
+          let cls = "snake-part";
+          if (i === 0) cls += " head";
+          else if (i === snake.length - 1) cls += " tail";
+          const eyeDir = getEyeClass(direction);
+          return (
+            <div key={i} className={cls} style={{ left: part.x * 20, top: part.y * 20 }}>
+              {i === 0 && (
+                <>
+                  <div className={`eye eye1 ${eyeDir}`}></div>
+                  <div className={`eye eye2 ${eyeDir}`}></div>
+                </>
+              )}
+            </div>
+          );
+        })}
+      </>
+    );
+  }
+
+  // ──────────── FOOD COMPONENT ────────────
+  function Food({ food }) {
+    return (
+      <div className="food" style={{ left: food.x * 20, top: food.y * 20 }}>
+        <div className="food-inner"></div>
+      </div>
+    );
+  }
+
+  // ──────────── SCORE COMPONENT ────────────
+  function Score({ score }) {
+    return (
+      <div className="hud-box">
+        <div className="hud-label">SCORE</div>
+        <div className="hud-value">{String(score).padStart(3,'0')}</div>
+      </div>
+    );
+  }
+
+  // ──────────── LEVEL COMPONENT ────────────
+  function Level({ score }) {
+    const level = Math.floor(score / 3) + 1;
+    return (
+      <div className="hud-box">
+        <div className="hud-label">LEVEL</div>
+        <div className="hud-value">{String(level).padStart(2,'0')}</div>
+      </div>
+    );
+  }
+
+  // ──────────── BOARD COMPONENT ────────────
+  function Board({ snake, food, direction }) {
+    return (
+      <div className="board">
+        <Snake snake={snake} direction={direction} />
+        <Food food={food} />
+      </div>
+    );
+  }
+
+  // ──────────── APP COMPONENT ────────────
+  function App() {
+    const [snake, setSnake] = useState([
+      { x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }
+    ]);
+    const [direction, setDirection]   = useState({ x: 1, y: 0 });
+    const [food, setFood]             = useState({ x: 5, y: 5 });
+    const [score, setScore]           = useState(0);
+    const [gameOver, setGameOver]     = useState(false);
+    const [gameStarted, setGameStarted] = useState(false);
+    const [speed, setSpeed]           = useState(180);
+
+    function generateFood() {
+      return {
+        x: Math.floor(Math.random() * boardSize),
+        y: Math.floor(Math.random() * boardSize)
+      };
+    }
+
+    function resetGame() {
+      setSnake([{ x: 10, y: 10 }, { x: 9, y: 10 }, { x: 8, y: 10 }]);
+      setDirection({ x: 1, y: 0 });
+      setFood(generateFood());
+      setScore(0);
+      setGameOver(false);
+      setGameStarted(true);
+      setSpeed(180);
+    }
+
+    // Game loop
+    useEffect(() => {
+      if (gameOver || !gameStarted) return;
+      const interval = setInterval(() => {
+        setSnake(prev => {
+          const newHead = { x: prev[0].x + direction.x, y: prev[0].y + direction.y };
+
+          if (newHead.x < 0 || newHead.y < 0 || newHead.x >= boardSize || newHead.y >= boardSize) {
+            setGameOver(true);
+            return prev;
+          }
+
+          if (prev.some(p => p.x === newHead.x && p.y === newHead.y)) {
+            setGameOver(true);
+            return prev;
+          }
+
+          if (newHead.x === food.x && newHead.y === food.y) {
+            setFood(generateFood());
+            setScore(s => s + 1);
+            setSpeed(sp => Math.max(70, sp - 8));
+            return [newHead, ...prev];
+          }
+
+          return [newHead, ...prev.slice(0, -1)];
+        });
+      }, speed);
+      return () => clearInterval(interval);
+    }, [direction, gameOver, food, gameStarted, speed]);
+
+    // Keyboard
+    useEffect(() => {
+      const handle = (e) => {
+        if (e.key === "Enter") {
+          if (!gameStarted || gameOver) resetGame();
+          return;
+        }
+        if (gameOver) return;
+
+        setDirection(prev => {
+          switch (e.key) {
+            case "ArrowUp":    return prev.y === 1  ? prev : { x: 0, y: -1 };
+            case "ArrowDown":  return prev.y === -1 ? prev : { x: 0, y: 1 };
+            case "ArrowLeft":  return prev.x === 1  ? prev : { x: -1, y: 0 };
+            case "ArrowRight": return prev.x === -1 ? prev : { x: 1, y: 0 };
+            default: return prev;
+          }
+        });
+      };
+      window.addEventListener("keydown", handle);
+      return () => window.removeEventListener("keydown", handle);
+    }, [gameOver, gameStarted]);
+
+    // ── START SCREEN ──
+    if (!gameStarted) return (
+      <div className="arcade-cabinet">
+        <div className="screen">
+          <div className="screen-title">SNAKE</div>
+          <div className="screen-sub">// ARCADE EDITION //</div>
+          <div className="deco-line"></div>
+          <div className="instructions-grid">
+            <div><span>↑↓←→</span></div><div>MOVER</div>
+            <div><span>ENTER</span></div><div>INICIAR</div>
+            <div><span>◆</span></div><div>COMIDA</div>
+            <div><span>✦</span></div><div>PUNTAJE</div>
+          </div>
+          <div className="deco-line"></div>
+          <button className="arcade-btn btn-start" onClick={() => setGameStarted(true)}>
+            [ INICIAR ]
+          </button>
+          <div className="insert-coin">— INSERT COIN —</div>
+        </div>
+      </div>
+    );
+
+    // ── GAME OVER SCREEN ──
+    if (gameOver) return (
+      <div className="arcade-cabinet">
+        <div className="screen">
+          <div className="screen-title danger">GAME OVER</div>
+          <div className="deco-line"></div>
+          <div className="score-display">PUNTAJE: <span>{String(score).padStart(3,'0')}</span></div>
+          <div className="screen-sub">NIVEL {Math.floor(score / 3) + 1} ALCANZADO</div>
+          <div className="deco-line"></div>
+          <button className="arcade-btn btn-restart" onClick={resetGame}>
+            [ REINICIAR ]
+          </button>
+          <div className="insert-coin">PRESIONA ENTER</div>
+        </div>
+      </div>
+    );
+
+    // ── IN GAME ──
+    return (
+      <div className="arcade-cabinet">
+        <div className="arcade-title">SNAKE</div>
+        <div className="title-sub">ARCADE EDITION</div>
+
+        <div className="hud">
+          <Score score={score} />
+          <div className="hud-divider"></div>
+          <Level score={score} />
+        </div>
+
+        <Board snake={snake} food={food} direction={direction} />
+
+        <div className="bottom-bar">USE ARROW KEYS TO MOVE</div>
+      </div>
+    );
+  }
+
+  ReactDOM.createRoot(document.getElementById("root")).render(<App />);
+</script>
+
+</body>
+</html>
